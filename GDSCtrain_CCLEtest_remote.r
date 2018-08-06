@@ -18,7 +18,7 @@
 library(tidyverse)
 library(h2o)
 library(DMwR)
-h2o.init()
+h2o.init(nthreads = -1)
 ############################################################
 ############################################################
 ### Stage 1 Data preparation(Expression data, RNA-Seq)######
@@ -31,8 +31,8 @@ h2o.init()
 
 # CCLE(RPKM)and GDSC(TPM)data tables
 #getwd()
-setwd('/media/sf_scpfiles/Drug/data/')
-CCLE_raw <- read.delim("CClE_RPKM.txt",header = TRUE,sep = '\t')
+setwd('/mnt/pcpnfs/homedirs/yzhang/CCLEGDSC_RF/data/')
+CCLE_raw <- read.delim("CCLE_RPKM.txt",header = TRUE,sep = '\t')
 #CCLE_raw[1:4,1:4]
 
 

@@ -3,19 +3,9 @@
 # Author: Yue Zhang
 # Create date: 03/Aug/2018
 # Contact: yue.zhang@lih.lu
-
-
-### Usage
-# Input: CCLE: IC50, RPKM; GDSC: IC50, TPM
-# Output: 
-#       drugname.pdf: Training ROC, test ROC/PRC using the other dataset
-#       Cellline_number.txt
-#       SummaryofRandomForest for each drug in tab files
-#       Result table of prediction for each drug in tab files
 library(tidyverse)
 library(h2o)
-library(DMwR)
-h2o.init( nthreads = -1)
+h2o.init()
 ############################################################
 ############################################################
 ### Stage 1 Data preparation(Expression data, RNA-Seq)######
@@ -28,8 +18,8 @@ h2o.init( nthreads = -1)
  
 # CCLE(RPKM)and GDSC(TPM)data tables
 #getwd()
-setwd('/mnt/pcpnfs/homedirs/yzhang/CCLEGDSC_RF/data/')
-CCLE_raw <- read.delim("CCLE_RPKM.txt",header = TRUE,sep = '\t')
+#setwd('P:/VM/Drug/data/')
+CCLE_raw <- read.delim("CClE_RPKM.txt",header = TRUE,sep = '\t')
 #CCLE_raw[1:4,1:4]
 
 
@@ -238,187 +228,64 @@ table(as.factor(IC50GDSC$SENRES))
 ############################################################
 ############################################################
 
-time.start <- proc.time()[3]
+
 #### Before that..Let's use one drug to build RF for testing the scripts and the data prepraration
 
-# Candidate: 17AAG   ####Test passed 06/Aug/2018
+# Candidate: 17AAG
 
 #======================================================================================================
-# Loop of 15 drugs
+# Preparation of the 17AAG data 
 #======================================================================================================
-for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
-  drugg <- levels(as.factor(IC50CCLE$drug))[i]
-  
-  pdf(paste0(getwd(),"/output/",drugg,"_CCLE.pdf"))  # The pdf receiving the output
-  OnedrugIC <- subset(IC50CCLE, drug == drugg, select = c("ccle.name","SENRES"))
-  
-  OnedrugAll <- left_join(y= CCLE_expR, x = OnedrugIC, by = c( "ccle.name" = "Cellline_CCLE" ))
-  
-  
-  table(apply(OnedrugAll, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
-  #
-  ## 471 mapped, 31 are not#
-  #
-  # Remove NAs rows
-  
-  OnedrugAll <- na.omit(OnedrugAll)
-  
-  ## make sure there is no NAs
-  table(apply(OnedrugAll, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
-  ## Pass!
-  
-  ### Remove the name of the cellline?
-  OnedrugAll <- OnedrugAll[,-1]
-  
-  ### Make Chr into Num and Factor 06/08/2018
-  OnedrugAll$SENRES <- as.factor(OnedrugAll$SENRES)
-  OnedrugAll[,2:length(colnames(OnedrugAll))] <- sapply(OnedrugAll[,2:length(colnames(OnedrugAll))],as.double)
-  
-  ###sapply is much more faster than mutate_if!!!!!!
-  
-  #### SMOTE the data
-  #OnedrugAllSMOTE <- SMOTE(SENRES ~.,OnedrugAll, perc.over = 2000, k = 5, perc.under = 100)
-  #table(OnedrugAllSMOTE$SENRES)
-  
-  ### Check the columns data type
-  #str(OnedrugAll[,1:5])
-  
-  #======================================================================================================
-  # Prepare data for validation/test GDSC here
-  #======================================================================================================
-  OnedrugICtest <- subset(IC50GDSC, drug == drugg, select = c("gdsc.name","SENRES"))
-  
-  OneDrugTest <- left_join(y= GDSC_expR, x = OnedrugICtest, by = c( "gdsc.name" = "Cellline_GDSC" ))
-  
-  
-  table(apply(OneDrugTest, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
-  #
-  ## 471 mapped, 31 are not#
-  #
-  # Remove NAs rows
-  
-  OneDrugTest <- na.omit(OneDrugTest)
-  
-  ## make sure there is no NAs
-  table(apply(OneDrugTest, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
-  ## Pass!
-  
-  ### Remove the name of the cellline?
-  OneDrugTest <- OneDrugTest[,-1]
-  
-  ### Make Chr into Num and Factor 06/08/2018
-  OneDrugTest$SENRES <- as.factor(OneDrugTest$SENRES)
-  OneDrugTest[,2:length(colnames(OneDrugTest))] <- sapply(OneDrugTest[,2:length(colnames(OneDrugTest))],as.double)
-  
-  
-  
-  ########################
-  # H2O.ai
-  ########################
-  
-  set.seed(3)
-  Onedrugh2ot <- as.h2o(OnedrugAll)
-  OnedrugTestH2o <- as.h2o(OneDrugTest)
-  
-  # splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
-  # train <- h2o.assign(splits[[1]],"train.hex")
-  # test <- h2o.assign(splits[[2]],"test.hex")
-  #str(train[,1:5])
-  rf <- h2o.randomForest(
-    training_frame = Onedrugh2ot,
-    x = 2:51116,
-    y = 1,
-    ntrees = 1000,
-    score_each_iteration = T,
-    max_depth = 15,
-    seed = 1234
-  )                                 # Model training using CCLE
-    
-  
-  
-  #======================================================================================================
-  # Result of the model/prediction/output the result datatable/draw the ROC and PRC 
-  #======================================================================================================
-  
-  
-  plot(h2o.performance(rf))    ### print the training ROC 
-  #summary(rf)
-  cat(capture.output(print(summary(rf)),
-                     file = paste0(getwd(),"/output/summaryrfCCLE_",drugg,".txt")))   ### print summary into a txt
-  
-  
-  result <- as.data.frame(h2o.predict(rf,OnedrugTestH2o))
-  re <- as.data.frame(cbind(as.vector(OnedrugTestH2o$SENRES),result))
-  colnames(re) <- c("Original","Predicted","Pred_RES","Pred_SEN")
-  write.table(re,file = paste0(getwd(),"/output/PredictionCCLEtoGDSC_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
-  ## write result table into a txt
-  
-  
-  #======================================================================================================
-  # ROC based on re
-  #======================================================================================================
-  
-  reAUC <- re[,c(-2,-4)]
-  
-  nnumber <- 500
-  TPR <- rep(0,nnumber)
-  FPR <- rep(0,nnumber)
-  precision <- rep(0,nnumber)
-  cutpoint <- rep(0,nnumber)
-  
-  p <- which(reAUC$Original == "RES")
-  n <- which(reAUC$Original == "SEN")
-  ### Calculate the TPR/FPR
-  
-  for(i in 1:nnumber){
-    cutpoint[i] <- as.numeric(i/nnumber)
-    predictionR <- reAUC$Pred_RES > cutpoint[i]
-    pp <- intersect(which(predictionR == TRUE),p)   ### TP
-    fp <- intersect(which(predictionR == TRUE),n)  ### Number of FP
-    TPR[i] <- length(pp)/length(p)
-    FPR[i] <- length(fp)/length(n)
-    precision[i] <- length(pp)/length(which(predictionR == TRUE))
-  }
-  
-  ### Calculate the AUC
-  
-  pos.value <- reAUC$Pred_RES[which(reAUC$Original == "RES")]
-  neg.value <- reAUC$Pred_RES[which(reAUC$Original == "SEN")]
-  
-  aucs1 <- replicate(2000,mean(sample(pos.value,1000,replace = T) > sample(neg.value,1000,replace = T)))
-  auc <- round(mean(aucs1),4)
-  
-  plotready <- cbind(FPR,TPR,precision)
-  colnames(plotready) <- c("FPR","TPR","precision")
-  
-  plotready <- as.data.frame(plotready)
-  
-  ROCc <- ggplot(plotready, aes(x = FPR,y = TPR))+
-    geom_path(color = "red", size = 2)+
-    geom_abline(intercept = 0, slope = 1, color='grey',size = 0.7)+
-    theme_bw()+
-    ggtitle(paste0("ROC curve of", drugg, " AUC = ", auc))
-  
-  
-  PRCc <- ggplot(plotready, aes(y = precision,x = TPR))+
-    geom_path(color = "red", size = 2)+
-    theme_bw()+
-    ggtitle(paste0("PRC curve of ", drugg))
-  
-  
-  print(ROCc)   ### print into pdf ROC
-  print(PRCc)   ### print into pdf PRC
-  
-  ############################################################################
-  
-  dev.off()
-  time.end <- time.start - proc.time()[3]
-  
-  message("*****",drugg,", Random forest training finished in ", round(time.end/60,2)," min.")
-}
+#pdf(paste0(getwd(),"/output/",levels(as.factor(IC50CCLE$drug))[i]),".pdf")  # The pdf receiving the output
+OnedrugIC <- subset(IC50CCLE, drug == "17AAG", select = c("ccle.name","SENRES"))
+
+OnedrugAll <- left_join(y= CCLE_expR, x = OnedrugIC, by = c( "ccle.name" = "Cellline_CCLE" ))
 
 
-#### CCLE>=>=>GDSC finished
+table(apply(OnedrugAll, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
+#
+## 471 mapped, 31 are not#
+#
+# Remove NAs rows
+
+OnedrugAll <- na.omit(OnedrugAll)
+
+## make sure there is no NAs
+table(apply(OnedrugAll, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
+## Pass!
+
+### Remove the name of the cellline?
+OnedrugAll <- OnedrugAll[,-1]
+
+########################
+# H2O.ai
+########################
+
+set.seed(3)
+Onedrugh2ot <- as.h2o(OnedrugAll)
+splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
+train <- h2o.assign(splits[[1]],"train.hex")
+test <- h2o.assign(splits[[2]],"test.hex")
+
+rf <- h2o.randomForest(
+  training_frame = train,
+  x = 2:51116,
+  y = 2,
+  model_id = "17AAG",
+  ntrees = 1500,
+  score_each_iteration = T,
+  max_depth = 25,
+  seed = 1234
+)
+  
+
+
+
+
+
+
+
+
 
 
 
