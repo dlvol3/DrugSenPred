@@ -320,8 +320,8 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   ########################
   
   set.seed(3)
-  Onedrugh2ot <- as.h2o(OnedrugTest)
-  OnedrugTestH2o <- as.h2o(OneDrugAll)
+  Onedrugh2ot <- as.h2o(OneDrugTest)
+  OnedrugTestH2o <- as.h2o(OnedrugAll)
   
   # splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
   # train <- h2o.assign(splits[[1]],"train.hex")
