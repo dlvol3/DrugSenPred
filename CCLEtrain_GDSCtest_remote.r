@@ -216,8 +216,9 @@ for (i in 1:length(rownames(IC50GDSC))){
 ## Are the classes balanced or not?
 # Checker
 
-table(as.factor(IC50CCLE$SENRES))
-table(as.factor(IC50GDSC$SENRES))
+#table(as.factor(IC50CCLE$SENRES))
+
+#table(as.factor(IC50GDSC$SENRES))
 
 ### Not very balanced...
 
@@ -320,6 +321,20 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   Onedrugh2ot <- as.h2o(OnedrugAll)
   OnedrugTestH2o <- as.h2o(OneDrugTest)
   
+  
+  #### The unbalanced data
+  CCLEub <- h2o.table(Onedrugh2ot['SENRES'])
+  str(CCLEub)
+  GDSCub <- h2o.table(OnedrugTestH2o['SENRES'])
+  
+  ub <- as.data.frame(h2o.cbind(CCLEub,GDSCub))
+  colnames(ub) <- c("classCCLE","countCCLE","classGDSC","countGDSC")
+  
+  write.table(ub,file = paste0(getwd(),"/output/CCLEGDSC_unbalanced",drugg,".txt"),
+              sep = '\t', col.names = TRUE,row.names = FALSE)  ### Print the unbanlacing info out to a file
+  
+
+  
   # splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
   # train <- h2o.assign(splits[[1]],"train.hex")
   # test <- h2o.assign(splits[[2]],"test.hex")
@@ -331,6 +346,9 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
     ntrees = 1000,
     score_each_iteration = T,
     max_depth = 15,
+    balance_classes = TRUE,
+    max_after_balance_size = 5,
+    model_id = paste0(drugg,"_CCLE"),
     seed = 1234
   )                                 # Model training using CCLE
     
@@ -353,7 +371,9 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   write.table(re,file = paste0(getwd(),"/output/PredictionCCLEtoGDSC_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
   ## write result table into a txt
   
-  
+  sink(paste0(getwd(),"/performance_",drugg,"_CtoG.txt"))
+  print(h2o.performance(model = rf, newdata = OnedrugTestH2o))
+  sink()
   #======================================================================================================
   # ROC based on re
   #======================================================================================================
@@ -412,9 +432,12 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   ############################################################################
   
   dev.off()
+  h2o.download_pojo(rf, getwd())
+  
   time.end <- time.start - proc.time()[3]
   
   message("*****",drugg,", Random forest training finished in ", round(time.end/60,2)," min.")
+  flush.console()
 }
 
 

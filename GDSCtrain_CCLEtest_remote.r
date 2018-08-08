@@ -217,10 +217,6 @@ for (i in 1:length(rownames(IC50GDSC))){
 # Labeling fishished 
 #======================================================================================================
 ## Are the classes balanced or not?
-# Checker
-
-table(as.factor(IC50CCLE$SENRES))
-table(as.factor(IC50GDSC$SENRES))
 
 ### Not very balanced...
 
@@ -334,6 +330,9 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
     ntrees = 1000,
     score_each_iteration = T,
     max_depth = 15,
+    balance_classes = TRUE,
+    max_after_balance_size = 5,
+    model_id = paste0(drugg,"_GDSC"),
     seed = 1234
   )                                 # Model training using CCLE
   
@@ -356,7 +355,9 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   write.table(re,file = paste0(getwd(),"/output/PredictionGDSCtoCCLE_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
   ## write result table into a txt
   
-  
+  sink(paste0(getwd(),"/performance_",drugg,"_GtoC.txt"))
+  print(h2o.performance(model = rf, newdata = OnedrugTestH2o))
+  sink()
   #======================================================================================================
   # ROC based on re
   #======================================================================================================
@@ -415,9 +416,11 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   ############################################################################
   
   dev.off()
+  h2o.download_pojo(rf, getwd())
   time.end <- time.start - proc.time()[3]
   
   message("*****",drugg,", Random forest training finished in ", round(time.end/60,2)," min.")
+  flush.console()
 }
 
 
