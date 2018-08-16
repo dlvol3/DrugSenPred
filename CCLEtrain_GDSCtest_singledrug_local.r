@@ -242,12 +242,12 @@ time.start <- proc.time()[3]
 #### Before that..Let's use one drug to build RF for testing the scripts and the data prepraration
 
 # Candidate: 17AAG   ####Test passed 06/Aug/2018
-
+plotall <- ''
 #======================================================================================================
 # Loop of 15 drugs
 #======================================================================================================
 
-  drugg <- "AZD6244"
+  drugg <- "17AAG"
   
   pdf(paste0(getwd(),"/output/",drugg,"_CCLE.pdf"))  # The pdf receiving the output
   OnedrugIC <- subset(IC50CCLE, drug == drugg, select = c("ccle.name","SENRES"))
@@ -274,12 +274,30 @@ time.start <- proc.time()[3]
   OnedrugAll$SENRES <- as.factor(OnedrugAll$SENRES)
   OnedrugAll[,2:length(colnames(OnedrugAll))] <- sapply(OnedrugAll[,2:length(colnames(OnedrugAll))],as.double)
   
+  
+  ############################################################
+  ## Move and modify this block to the GDSC for the script runs another way around
+  ## Calculate the ratio of the class   
+  cc <- as.data.frame(table(OnedrugAll$SENRES))  ### change here @OnedrugAll to ..
   ###sapply is much more faster than mutate_if!!!!!!
+
+    if(cc$Freq[1] > 2*cc$Freq[2]){
+      ratioS <- floor(cc$Freq[1]/cc$Freq[2]) 
+      #### SMOTE the data
+      OnedrugAllSMOTE <- SMOTE(SENRES ~.,OnedrugAll, perc.over = (ratioS*100-100), 
+                               k = 5, perc.under = 100*((ratioS*100)/(ratioS*100-100))) 
+      ### round() is not suitable when the ratioS is 1<ratioS<1.5 
+      OnedrugAll <- OnedrugAllSMOTE     # Re-name the SMOTE table with the original name 
+      }else if(2*cc$Freq[1] <= cc$Freq[2]){           ### use ceiling(),floor() instead
+      ratioS <- floor(cc$Freq[2]/cc$Freq[1])
+      #### SMOTE the data
+      OnedrugAllSMOTE <- SMOTE(SENRES ~.,OnedrugAll, perc.over = (ratioS*100-100), 
+                               k = 5, perc.under = 100*((ratioS*100)/(ratioS*100-100)))
+      OnedrugAll <- OnedrugAllSMOTE   # Re-name the SMOTE table with the original name
+      
+    }          
   
-  #### SMOTE the data
-  #OnedrugAllSMOTE <- SMOTE(SENRES ~.,OnedrugAll, perc.over = 2000, k = 5, perc.under = 100)
-  #table(OnedrugAllSMOTE$SENRES)
-  
+  #################################################################
   ### Check the columns data type
   #str(OnedrugAll[,1:5])
   
@@ -330,19 +348,18 @@ time.start <- proc.time()[3]
   
   write.table(ub,file = paste0(getwd(),"/output/CCLEGDSC_unbalanced",drugg,".txt"),
               sep = '\t', col.names = TRUE,row.names = FALSE)
-  # splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
-  # train <- h2o.assign(splits[[1]],"train.hex")
-  # test <- h2o.assign(splits[[2]],"test.hex")
+  splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
+  train <- h2o.assign(splits[[1]],"train.hex")
+  test <- h2o.assign(splits[[2]],"test.hex")
   #str(train[,1:5])
   rf <- h2o.randomForest(
-    training_frame = Onedrugh2ot,
+    training_frame = train,
+    validation_frame = test,
     x = 2:51116,
     y = 1,
     ntrees = 10,
     score_each_iteration = T,
     max_depth = 15,
-    balance_classes = TRUE,
-    max_after_balance_size = 5,
     model_id = paste0(drugg,"_CCLE"),
     seed = 1234
   )                                 # Model training using CCLE
@@ -352,13 +369,14 @@ time.start <- proc.time()[3]
   #======================================================================================================
   # Result of the model/prediction/output the result datatable/draw the ROC and PRC 
   #======================================================================================================
+  rf@model$validation_metrics
   
   
   plot(h2o.performance(rf))    ### print the training ROC 
   summary(rf)
   cat(capture.output(print(summary(rf)),
                      file = paste0(getwd(),"/output/summaryrfCCLE_",drugg,".txt")))   ### print summary into a txt
-  
+  result_validation <- as.data.frame(h2o.predict(rf,test))
   
   result <- as.data.frame(h2o.predict(rf,OnedrugTestH2o))
   re <- as.data.frame(cbind(as.vector(OnedrugTestH2o$SENRES),result))
@@ -409,11 +427,15 @@ time.start <- proc.time()[3]
   aucs1 <- replicate(2000,mean(sample(pos.value,1000,replace = T) > sample(neg.value,1000,replace = T)))
   auc <- round(mean(aucs1),4)
   
+  
   plotready <- cbind(FPR,TPR,precision)
-  colnames(plotready) <- c("FPR","TPR","precision")
-  
   plotready <- as.data.frame(plotready)
+  plotready$DRUG <- drugg
   
+  plotall <- rbind(plotall, plotready)
+  colnames(plotready) <- c("FPR","TPR","precision","DRUG")
+  
+
   ROCc <- ggplot(plotready, aes(x = FPR,y = TPR))+
     geom_path(color = "red", size = 2)+
     geom_abline(intercept = 0, slope = 1, color='grey',size = 0.7)+
@@ -440,7 +462,7 @@ time.start <- proc.time()[3]
   h2o.download_pojo(rf, getwd())
   deciP <- as.data.frame(h2o.predict_leaf_node_assignment(rf, OnedrugTestH2o))
   
-  write.table(decoP,file = paste0(getwd(),"/output/dicisionPATH",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
+  write.table(deciP,file = paste0(getwd(),"/output/dicisionPATH",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
   
 #### CCLE>=>=>GDSC finished
 
