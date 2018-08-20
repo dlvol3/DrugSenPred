@@ -25,7 +25,7 @@ h2o.init( nthreads = -1)
 #======================================================================================================
 # CCLE RPKM>TPM re-formatting 
 #======================================================================================================
- 
+
 # CCLE(RPKM)and GDSC(TPM)data tables
 #getwd()
 setwd('/mnt/pcpnfs/homedirs/yzhang/CCLEGDSC_RF/data/')
@@ -153,7 +153,7 @@ numberofavalibleDrugsCelllineList <- list(CCLE_IC50_cellline_numbers,CCLE_IC50_d
                                           GDSC_IC50_cellline_numbers,GDSC_IC50_drug_numbers)
 
 cat(capture.output(print(numberofavalibleDrugsCelllineList),
-                   file = paste0(getwd(),"/output/numberofavalibleDrugsCelllineList.txt")))
+                   file = paste0(getwd(),"/output_imb/numberofavalibleDrugsCelllineList.txt")))
 
 ####============ Throw the terminal info into a .txt
 
@@ -198,7 +198,7 @@ for (i in 1:length(rownames(IC50CCLE))){
     IC50CCLE$SENRES[i] <- "SEN"
   }
 }
-   
+
 ### then GDSC
 IC50GDSC$SENRES <- ''
 for (i in 1:length(rownames(IC50GDSC))){
@@ -229,7 +229,7 @@ for (i in 1:length(rownames(IC50GDSC))){
 
 #ggplot(IC50CCLE, aes(y = IC50CCLE$CCLE_log10_IC50, x = IC50CCLE$drug))+
 #  geom_violin(stat = "ydensity", position = "dodge")
-  
+
 
 ####
 
@@ -242,15 +242,15 @@ for (i in 1:length(rownames(IC50GDSC))){
 time.start <- proc.time()[3]
 #### Before that..Let's use one drug to build RF for testing the scripts and the data prepraration
 
-# Candidate: 17AAG   ####Test passed 06/Aug/2018
-
+## Init of a matrix for plotting
+plotall <- ''
 #======================================================================================================
 # Loop of 15 drugs
 #======================================================================================================
 for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   drugg <- levels(as.factor(IC50CCLE$drug))[i]
   
-  pdf(paste0(getwd(),"/output/",drugg,"_CCLE.pdf"))  # The pdf receiving the output
+  pdf(paste0(getwd(),"/output_imb/",drugg,"_CCLE.pdf"))  # The pdf receiving the output
   OnedrugIC <- subset(IC50CCLE, drug == drugg, select = c("ccle.name","SENRES"))
   
   OnedrugAll <- left_join(y= CCLE_expR, x = OnedrugIC, by = c( "ccle.name" = "Cellline_CCLE" ))
@@ -277,9 +277,8 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   
   ###sapply is much more faster than mutate_if!!!!!!
   
-  #### SMOTE the data
-  #OnedrugAllSMOTE <- SMOTE(SENRES ~.,OnedrugAll, perc.over = 2000, k = 5, perc.under = 100)
-  #table(OnedrugAllSMOTE$SENRES)
+
+  #################################################################
   
   ### Check the columns data type
   #str(OnedrugAll[,1:5])
@@ -330,50 +329,50 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   ub <- as.data.frame(h2o.cbind(CCLEub,GDSCub))
   colnames(ub) <- c("classCCLE","countCCLE","classGDSC","countGDSC")
   
-  write.table(ub,file = paste0(getwd(),"/output/CCLEGDSC_unbalanced",drugg,".txt"),
+  write.table(ub,file = paste0(getwd(),"/output_imb/CCLEGDSC_unbalanced",drugg,".txt"),
               sep = '\t', col.names = TRUE,row.names = FALSE)  ### Print the unbanlacing info out to a file
   
-
   
-  # splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
-  # train <- h2o.assign(splits[[1]],"train.hex")
-  # test <- h2o.assign(splits[[2]],"test.hex")
+  
+  splits <- h2o.splitFrame(Onedrugh2ot,c(0.75),seed = 3)
+  train <- h2o.assign(splits[[1]],"train.hex")
+  test <- h2o.assign(splits[[2]],"test.hex")
   #str(train[,1:5])
   rf <- h2o.randomForest(
-    training_frame = Onedrugh2ot,
+    training_frame = train,
+    validation_frame = test,
     x = 2:51116,
     y = 1,
     ntrees = 1000,
     score_each_iteration = T,
     max_depth = 15,
-    balance_classes = TRUE,
-    max_after_balance_size = 5,
     model_id = paste0(drugg,"_CCLE"),
     seed = 1234
   )                                 # Model training using CCLE
-    
+  
   
   
   #======================================================================================================
-  # Result of the model/prediction/output the result datatable/draw the ROC and PRC 
+  # Result of the model/prediction/output_imb the result datatable/draw the ROC and PRC 
   #======================================================================================================
   
   
   plot(h2o.performance(rf))    ### print the training ROC 
   #summary(rf)
   cat(capture.output(print(summary(rf)),
-                     file = paste0(getwd(),"/output/summaryrfCCLE_",drugg,".txt")))   ### print summary into a txt
+                     file = paste0(getwd(),"/output_imb/summaryrfCCLE_",drugg,".txt")))   ### print summary into a txt
   
   
   result <- as.data.frame(h2o.predict(rf,OnedrugTestH2o))
   re <- as.data.frame(cbind(as.vector(OnedrugTestH2o$SENRES),result))
   colnames(re) <- c("Original","Predicted","Pred_RES","Pred_SEN")
-  write.table(re,file = paste0(getwd(),"/output/PredictionCCLEtoGDSC_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
+  write.table(re,file = paste0(getwd(),"/output_imb/PredictionCCLEtoGDSC_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
   ## write result table into a txt
   
-  sink(paste0(getwd(),"/performance_",drugg,"_CtoG.txt"))
-  print(h2o.performance(model = rf, newdata = OnedrugTestH2o))
-  sink()
+  cat(capture.output(print(h2o.performance(model = rf, newdata = OnedrugTestH2o)),
+                     file = paste0(getwd(),"/output_imb/performance_CtoG_",drugg,".txt"))) ### print summary into a txt
+  
+  
   #======================================================================================================
   # ROC based on re
   #======================================================================================================
@@ -409,7 +408,11 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   auc <- round(mean(aucs1),4)
   
   plotready <- cbind(FPR,TPR,precision)
-  colnames(plotready) <- c("FPR","TPR","precision")
+  plotready <- as.data.frame(plotready)
+  plotready$DRUG <- drugg
+  
+  plotall <- rbind(plotall, plotready)
+  colnames(plotready) <- c("FPR","TPR","precision","DRUG")
   
   plotready <- as.data.frame(plotready)
   
@@ -417,7 +420,7 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
     geom_path(color = "red", size = 2)+
     geom_abline(intercept = 0, slope = 1, color='grey',size = 0.7)+
     theme_bw()+
-    ggtitle(paste0("ROC curve of", drugg, " AUC = ", auc))
+    ggtitle(paste0("ROC curve of ", drugg, " AUC = ", auc))
   
   
   PRCc <- ggplot(plotready, aes(y = precision,x = TPR))+
@@ -433,17 +436,18 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   
   dev.off()
   h2o.download_pojo(rf, getwd())
+  deciP <- as.data.frame(h2o.predict_leaf_node_assignment(rf, OnedrugTestH2o))
+  
+  write.table(deciP,file = paste0(getwd(),"/output_imb/dicisionPATH",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
   
   time.end <- time.start - proc.time()[3]
   
   message("*****",drugg,", Random forest training finished in ", round(time.end/60,2)," min.")
-  flush.console()
+  
 }
+colnames(plotall) <- c("FPR","TPR","precision","DRUG")
+plotall <- plotall[-1,]
+write.table(plotall,file = paste0(getwd(),"/output_imb/Allplot_CCLE.txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
 
 
 #### CCLE>=>=>GDSC finished
-
-
-
-
-
