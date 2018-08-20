@@ -417,7 +417,7 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
     geom_path(color = "red", size = 2)+
     geom_abline(intercept = 0, slope = 1, color='grey',size = 0.7)+
     theme_bw()+
-    ggtitle(paste0("ROC curve of", drugg, " AUC = ", auc))
+    ggtitle(paste0("ROC curve of ", drugg, " AUC = ", auc))
   
   
   PRCc <- ggplot(plotready, aes(y = precision,x = TPR))+

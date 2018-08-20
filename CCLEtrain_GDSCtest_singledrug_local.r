@@ -211,6 +211,35 @@ for (i in 1:length(rownames(IC50GDSC))){
 }
 
 #======================================================================================================
+# Export the IC50 ready data 
+#======================================================================================================
+CCLEall <- left_join(y= CCLE_expR, x = IC50CCLE, by = c("ccle.name" = "Cellline_CCLE"))
+table(apply(CCLEall, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
+CCLEallnona <- na.omit(CCLEall)
+
+GDSCall <- left_join(y= GDSC_expR, x = IC50GDSC, by = c("gdsc.name" = "Cellline_GDSC" ))
+GDSCallnona <- na.omit(GDSCall)
+
+
+
+
+write.table(IC50CCLE,file = paste0(getwd(),"/output/CCLEIC50.txt"),
+            sep = '\t', col.names = TRUE,row.names = FALSE)
+write.table(IC50GDSC,file = paste0(getwd(),"/output/GDSCIC50.txt"),
+            sep = '\t', col.names = TRUE,row.names = FALSE)
+
+
+write.table(CCLEall,file = paste0(getwd(),"/output/CCLEreadywithNA.txt"),
+            sep = '\t', col.names = TRUE,row.names = FALSE)
+write.table(GDSCall,file = paste0(getwd(),"/output/GDSCreadywithNA.txt"),
+            sep = '\t', col.names = TRUE,row.names = FALSE)
+
+write.table(CCLEallnona,file = paste0(getwd(),"/output/CCLEready.txt"),
+            sep = '\t', col.names = TRUE,row.names = FALSE)
+write.table(GDSCallnona,file = paste0(getwd(),"/output/GDSCready.txt"),
+            sep = '\t', col.names = TRUE,row.names = FALSE)
+
+#======================================================================================================
 # Labeling fishished 
 #======================================================================================================
 ## Are the classes balanced or not?
@@ -424,7 +453,7 @@ plotall <- ''
   pos.value <- reAUC$Pred_RES[which(reAUC$Original == "RES")]
   neg.value <- reAUC$Pred_RES[which(reAUC$Original == "SEN")]
   
-  aucs1 <- replicate(2000,mean(sample(pos.value,1000,replace = T) > sample(neg.value,1000,replace = T)))
+  aucs1 <- replicate(5000,mean(sample(pos.value,2000,replace = T) > sample(neg.value,2000,replace = T)))
   auc <- round(mean(aucs1),4)
   
   
@@ -453,6 +482,85 @@ plotall <- ''
   print(PRCc)   ### print into pdf PRC
   
   ############################################################################
+  
+  
+  
+  
+###On Validation set
+ #======================================================================================================
+  
+  resultv <- as.data.frame(h2o.predict(rf,test))
+  rev <- as.data.frame(cbind(as.vector(test$SENRES),resultv))
+  colnames(rev) <- c("Original","Predicted","Pred_RES","Pred_SEN")
+  write.table(re,file = paste0(getwd(),"/output_SMOTE/PredictionValidation_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
+  ## write result table into a txt
+  
+  sink(paste0(getwd(),"/performance_Validation",drugg,"_CtoG.txt"))
+  print(h2o.performance(model = rf, newdata = test))
+  sink()
+  #======================================================================================================
+  # ROC based on re
+  #======================================================================================================
+  
+  reAUC <- rev[,c(-2,-4)]    ####Get the data from re_Validation
+  
+  nnumber <- 500
+  TPR <- rep(0,nnumber)
+  FPR <- rep(0,nnumber)
+  precision <- rep(0,nnumber)
+  cutpoint <- rep(0,nnumber)
+  
+  p <- which(reAUC$Original == "RES")
+  n <- which(reAUC$Original == "SEN")
+  ### Calculate the TPR/FPR
+  
+  for(i in 1:nnumber){
+    cutpoint[i] <- as.numeric(i/nnumber)
+    predictionR <- reAUC$Pred_RES > cutpoint[i]
+    pp <- intersect(which(predictionR == TRUE),p)   ### TP
+    fp <- intersect(which(predictionR == TRUE),n)  ### Number of FP
+    TPR[i] <- length(pp)/length(p)
+    FPR[i] <- length(fp)/length(n)
+    precision[i] <- length(pp)/length(which(predictionR == TRUE))
+  }
+  
+  ### Calculate the AUC
+  
+  pos.value <- reAUC$Pred_RES[which(reAUC$Original == "RES")]
+  neg.value <- reAUC$Pred_RES[which(reAUC$Original == "SEN")]
+  
+  aucs1 <- replicate(5000,mean(sample(pos.value,2000,replace = T) > sample(neg.value,2000,replace = T)))
+  auc <- round(mean(aucs1),4)
+  
+  plotready <- cbind(FPR,TPR,precision)
+  plotready <- as.data.frame(plotready)
+  plotready$DRUG <- drugg
+  
+
+  
+  ROCv <- ggplot(plotready, aes(x = FPR,y = TPR))+
+    geom_path(color = "red", size = 2)+
+    geom_abline(intercept = 0, slope = 1, color='grey',size = 0.7)+
+    theme_bw()+
+    ggtitle(paste0("ROC curve of validation set_", drugg, " AUC = ", auc))
+  
+  
+  PRCv <- ggplot(plotready, aes(y = precision,x = TPR))+
+    geom_path(color = "red", size = 2)+
+    theme_bw()+
+    ggtitle(paste0("PRC curve of validation set_", drugg))
+  
+  
+  print(ROCv)   ### print into pdf ROC
+  print(PRCv)   ### print into pdf PRC
+ #======================================================================================================
+ 
+ 
+ 
+  
+  
+  
+  
   
   dev.off()
   time.end <- time.start - proc.time()[3]
