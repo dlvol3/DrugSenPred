@@ -375,9 +375,8 @@ for (i in 1:length(levels(as.factor(IC50CCLE$drug)))){
   write.table(re,file = paste0(getwd(),"/output_SMOTE/PredictionGDSCtoCCLE_",drugg,".txt"),sep = '\t', col.names = TRUE,row.names = FALSE)
   ## write result table into a txt
   
-  sink(paste0(getwd(),"/performance_",drugg,"_GtoC.txt"))
-  print(h2o.performance(model = rf, newdata = OnedrugTestH2o))
-  sink()
+  cat(capture.output(print(h2o.performance(model = rf, newdata = OnedrugTestH2o)),
+                     file = paste0(getwd(),"/output_SMOTE/performance_GtoC_",drugg,".txt")))
   #======================================================================================================
   # ROC based on re
   #======================================================================================================
