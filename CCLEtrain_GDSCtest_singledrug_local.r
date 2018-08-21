@@ -214,8 +214,16 @@ for (i in 1:length(rownames(IC50GDSC))){
 # Export the IC50 ready data 
 #======================================================================================================
 CCLEall <- left_join(y= CCLE_expR, x = IC50CCLE, by = c("ccle.name" = "Cellline_CCLE"))
-table(apply(CCLEall, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
+#table(apply(CCLEall, 1, function(x) any(is.na(x) | is.infinite(x))))  ## NA checker
 CCLEallnona <- na.omit(CCLEall)
+
+for (i in 1:length(levels(as.factor(CCLEallnona$drug)))){
+  drugg <- levels(as.factor(IC50CCLE$drug))[i]
+  Onedrug <- subset(CCLEallnona, drug == drugg, select = c("ccle.name","SENRES"))
+  counter <- table(Onedrug$SENRES)
+  write.table(counter,file = paste0(getwd(),"/output_SMOTE/CCLEcounter_",drugg,".txt"),
+              sep = '\t', col.names = TRUE,row.names = FALSE)
+  }
 
 GDSCall <- left_join(y= GDSC_expR, x = IC50GDSC, by = c("gdsc.name" = "Cellline_GDSC" ))
 GDSCallnona <- na.omit(GDSCall)
